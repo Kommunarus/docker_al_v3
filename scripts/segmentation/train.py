@@ -101,8 +101,8 @@ def train_al(path_to_images, path_to_split, ploting=False):
             loss = dsc_loss(y_pred, y_true)
             val_loss += loss.item()/len(data)
 
-            y_t.append(y_true[:, 0])
-            y_p.append(y_pred)
+            y_t.append(y_true[:, 0].cpu().detach())
+            y_p.append(y_pred.cpu().detach())
             # print(epoch, loss.item())
         pass
         a = torch.concatenate(y_t)
