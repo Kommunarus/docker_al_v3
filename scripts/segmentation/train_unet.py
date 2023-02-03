@@ -201,73 +201,7 @@ def find_err(unet, path_to_images, ids, n_gpu):
     return err2
 
 
-def train():
-    random.seed(42)
-
-    device = torch.device("cpu" if not torch.cuda.is_available() else 'cuda:0')
-
-    param_train = dict()
-    param_train['pathdataset'] = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/stage1_train'
-    param_train['batch_size'] = 8
-
-    all_images = os.listdir(param_train['pathdataset'])
-    train_img, val_img = train_test_split(all_images, test_size=5)
-    zero_img = random.sample(train_img, k=3)
-
-    param_train['first_labels'] = zero_img
-
-    loader_train = data_loaders(param_train)
-
-    param_val = copy.copy(param_train)
-    param_val['first_labels'] = val_img
-    loader_val = data_loaders(param_val)
-
-    unet = UNet(in_channels=4, out_channels=1)
-    unet.to(device)
-
-    dsc_loss = DiceLoss()
-    best_validation_dsc = 0.0
-    epochs = 50
-    lr = 5e-4
-
-    optimizer = optim.Adam(unet.parameters(), lr=lr)
-    lossic_train = []
-    lossic_val = []
-    for epoch in tqdm(range(epochs), total=epochs):
-        unet.train()
-        train_loss = 0
-        val_loss = 0
-        for i, data in enumerate(loader_train):
-            x, y_true = data
-            x, y_true = x.to(device), y_true.to(device)
-            optimizer.zero_grad()
-
-            y_pred = unet(x)
-
-            loss = dsc_loss(y_pred, y_true)
-            # print(epoch, loss.item())
-            train_loss += loss.item()/len(data)
-
-            loss.backward()
-            optimizer.step()
-        lossic_train.append(train_loss/len(zero_img))
-        unet.eval()
-        for i, data in enumerate(loader_val):
-            x, y_true = data
-            x, y_true = x.to(device), y_true.to(device)
-
-            y_pred = unet(x)
-
-            loss = dsc_loss(y_pred, y_true)
-            val_loss += loss.item()/len(data)
-            # print(epoch, loss.item())
-        lossic_val.append(val_loss/len(val_img))
-
-    plt.plot(lossic_train, label='loss train')
-    plt.plot(lossic_val, label='loss val')
-    plt.legend()
-    plt.grid()
-    plt.show()
 
 if __name__ == '__main__':
-    train()
+    pass
+    # train()

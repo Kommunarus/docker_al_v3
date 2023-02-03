@@ -1,8 +1,8 @@
 import os
 import random
 
-from scripts.segmentation.train import find_err
-from scripts.segmentation.train import train_al
+from scripts.segmentation.train_unet import find_err
+from scripts.segmentation.train_unet import train_al
 
 def save_id(listi, path, prefix):
     with open(os.path.join(path, 'train', 'step_{}.txt'.format(prefix)), 'w') as f:

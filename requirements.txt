@@ -16,7 +16,7 @@ torchvision>=0.10.1
 numpy~=1.23.5
 pillow~=9.3.0
 
-# pycocotools
+pycocotools
 albumentations==1.3.0
 
 tqdm
