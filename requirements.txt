@@ -1,22 +1,22 @@
-PyQt6
+# PyQt6
 
 scikit-image
 scikit-learn~=1.1.3
 matplotlib
-flask~=2.2.2
-flask_cors
-flask_restful
+# flask~=2.2.2
+# flask_cors
+# flask_restful
 
-pytorch-lightning==1.5.4
-PyYAML==6.0
-tensorboard>=2.2.0
+# pytorch-lightning==1.5.4
+# PyYAML==6.0
+# tensorboard>=2.2.0
 torch>=1.6.1
-torchsummary==1.5.1
+# torchsummary==1.5.1
 torchvision>=0.10.1
 numpy~=1.23.5
 pillow~=9.3.0
 
-pycocotools
+# pycocotools
 albumentations==1.3.0
 
 tqdm

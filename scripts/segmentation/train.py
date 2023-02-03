@@ -26,13 +26,37 @@ def datasets(parametres, test):
     train = Dataset(parametres['pathdataset'], parametres['img'], test)
     return train
 
-def train_al(path_to_images, path_to_split, ploting=False):
 
-    device = torch.device("cpu" if not torch.cuda.is_available() else 'cuda:0')
+def eval(unet, path_to_images, test_img, n_gpu):
+    device = torch.device("cpu" if not torch.cuda.is_available() else f'cuda:{n_gpu}')
+
+    param_test = dict()
+    param_test['pathdataset'] = path_to_images
+    param_test['batch_size'] = 1
+    param_test['img'] = test_img
+    loader_val = data_loaders(param_test, shuffle=False, test=True)
+
+    unet.to(device)
+
+    unet.eval()
+    y_p = []
+    for i, data in enumerate(loader_val):
+        x, _ = data
+        x = x.to(device)
+
+        y_pred = unet(x)
+        y_p.append(y_pred[0].cpu().detach().numpy()[0])
+
+    return y_p
+
+
+def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
+
+    device = torch.device("cpu" if not torch.cuda.is_available() else f'cuda:{n_gpu}')
 
     param_train = dict()
     param_train['pathdataset'] = path_to_images
-    param_train['batch_size'] = 8
+    param_train['batch_size'] = 16
 
     train_img = []
     for file in os.listdir(os.path.join(path_to_split, 'train')):
@@ -63,7 +87,7 @@ def train_al(path_to_images, path_to_split, ploting=False):
     dsc_loss = DiceLoss()
     best_validation_dsc = 0.0
     best_model = None
-    epochs = 2500
+    epochs = 1000
     lr = 5e-4
     metric = BinaryMetrics()
 
@@ -84,40 +108,41 @@ def train_al(path_to_images, path_to_split, ploting=False):
 
             loss = dsc_loss(y_pred, y_true)
             # print(epoch, loss.item())
-            train_loss += loss.item()/len(data)
+            train_loss += loss.item()
 
             loss.backward()
             optimizer.step()
-        lossic_train.append(train_loss/len(train_img))
-        unet.eval()
-        y_t = []
-        y_p = []
-        for i, data in enumerate(loader_val):
-            x, y_true = data
-            x, y_true = x.to(device), y_true.to(device)
+        # lossic_train.append(train_loss/len(train_img))
+        if epoch % 5 == 0 and epoch != 0:
+            unet.eval()
+            y_t = []
+            y_p = []
+            for i, data in enumerate(loader_val):
+                x, y_true = data
+                x, y_true = x.to(device), y_true.to(device)
 
-            y_pred = unet(x)
+                y_pred = unet(x)
 
-            loss = dsc_loss(y_pred, y_true)
-            val_loss += loss.item()/len(data)
+                loss = dsc_loss(y_pred, y_true)
+                val_loss += loss.item()
 
-            y_t.append(y_true[:, 0].cpu().detach())
-            y_p.append(y_pred.cpu().detach())
-            # print(epoch, loss.item())
-        pass
-        a = torch.concatenate(y_t)
-        b = torch.concatenate(y_p)
-        m = metric(a, b)
-        if m[1] > best_validation_dsc:
-            best_validation_dsc = m[1]
-            best_model = copy.deepcopy(unet)
-            earling = 0
-        else:
-            earling += 1
-        if earling == 50:
-            # print('stop learning for step {}'.format(epoch+1))
-            break
-        lossic_val.append(val_loss/len(val_img))
+                y_t.append(y_true[:, 0].cpu().detach())
+                y_p.append(y_pred.cpu().detach())
+                # print(epoch, loss.item())
+            pass
+            a = torch.concatenate(y_t)
+            b = torch.concatenate(y_p)
+            m = metric(a, b)[0]
+            if m >= best_validation_dsc:
+                best_validation_dsc = m
+                best_model = copy.deepcopy(unet)
+                earling = 0
+            else:
+                earling += 1
+            if earling == 20:
+                # print('stop learning for step {}'.format(epoch+1))
+                break
+        # lossic_val.append(val_loss/len(val_img))
     # test
     if ploting:
         iter_b = iter(loader_val)
@@ -133,14 +158,14 @@ def train_al(path_to_images, path_to_split, ploting=False):
     return best_model, best_validation_dsc.item()
 
 
-def find_err(unet, path_to_images, ids):
+def find_err(unet, path_to_images, ids, n_gpu):
     param_test = dict()
     param_test['pathdataset'] = path_to_images
-    param_test['batch_size'] = 8
+    param_test['batch_size'] = 16
     param_test['img'] = ids
 
     loader_test = data_loaders(param_test, test=True)
-    device = torch.device("cpu" if not torch.cuda.is_available() else 'cuda:0')
+    device = torch.device("cpu" if not torch.cuda.is_available() else f'cuda:{n_gpu}')
 
     unet.eval()
     ids = []
@@ -150,9 +175,24 @@ def find_err(unet, path_to_images, ids):
         x = x.to(device)
         y_pred = unet(x)
         vpred = y_pred[:, 0]
+
+        # 1
         v1pred = 1 - vpred
         margin = 1 - (torch.abs(vpred - v1pred))
         marg_i = torch.mean(margin, (1, 2))
+
+        # 2
+        # vpred[vpred > 0.7] = 1
+        # vpred[vpred < 0.3] = 0
+        # v1pred = 1 - vpred
+        # margin = 1 - (torch.abs(vpred - v1pred))
+        # marg_i = torch.mean(margin, (1, 2))
+
+        # 3
+        # T_03_07 = ((vpred > 0.4) & (vpred < 0.6)).float()
+        # T_07_1 = (vpred >= 0.7).float()
+        # marg_i = torch.sum(T_03_07, (1, 2)) / 224**2
+
         ids = ids + id.tolist()
         mag = mag + marg_i.tolist()
         # margin_img = margin.view(-1, 1, 224, 224)
@@ -167,7 +207,7 @@ def train():
     device = torch.device("cpu" if not torch.cuda.is_available() else 'cuda:0')
 
     param_train = dict()
-    param_train['pathdataset'] = '/home/neptun/PycharmProjects/datasets/data-science-bowl-2018/stage1_train'
+    param_train['pathdataset'] = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/stage1_train'
     param_train['batch_size'] = 8
 
     all_images = os.listdir(param_train['pathdataset'])

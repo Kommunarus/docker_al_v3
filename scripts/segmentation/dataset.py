@@ -3,16 +3,17 @@ from torch.utils.data import Dataset
 import os
 from PIL import Image
 from torchvision import transforms
+import albumentations as A
 
 # mean = [0.4914, 0.4822, 0.4465]
 # std = [0.2470, 0.2435, 0.2616]
-
-data_transform = transforms.Compose([
-    # transforms.ToPILImage(),
-    # transforms.Resize(224),
-    transforms.ToTensor(),
-    # transforms.Normalize(mean=mean,  std=std)
-])
+#
+# data_transform = transforms.Compose([
+#     # transforms.ToPILImage(),
+#     # transforms.Resize(224),
+#     transforms.ToTensor(),
+#     # transforms.Normalize(mean=mean,  std=std)
+# ])
 
 class Dataset_objdetect(Dataset):
     def __init__(self, path_to_dataset, id_images, test=False):
@@ -34,6 +35,11 @@ class Dataset_objdetect(Dataset):
                 self.data[idx] = (images, None)
 
             self.indxx.append(idx)
+        self.transform = A.Compose([
+            A.VerticalFlip(p=0.5),
+            A.HorizontalFlip(p=0.5),
+            A.RandomBrightnessContrast(p=0.2),
+        ])
 
 
     def __getitem__(self, idx):
@@ -44,7 +50,6 @@ class Dataset_objdetect(Dataset):
         # image
         pil_img = Image.open(path_img)
         pil_img = pil_img.resize((224, 224))
-        transformed_image = data_transform(pil_img)
 
         # mask
         if self.use_mask:
@@ -55,9 +60,18 @@ class Dataset_objdetect(Dataset):
                 masks.append(np.array(ma))
 
             s_mask = np.sum(masks, 0)/255
-            transformed_mask = data_transform(s_mask)
+            np_arr = np.array(pil_img)
+            transformed = self.transform(image=np_arr, mask=s_mask)
+            transformed_image = transformed['image']
+            transformed_mask = transformed['mask']
+
+            transformed_image = transforms.ToTensor()(transformed_image)
+            transformed_mask = transforms.ToTensor()(transformed_mask)
+
+
             return transformed_image, transformed_mask
         else:
+            transformed_image = transforms.ToTensor()(pil_img)
             return transformed_image, idx
 
     def __len__(self):
