@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def _summarize(coco, ap=1, iouThr=None, areaRng='all', maxDets=500):
+def _summarize(coco, ap=1, iouThr=None, areaRng='all', maxDets=100):
     p = coco.params
     iStr = ' {:<18} {} @[ IoU={:<9} | area={:>6s} | maxDets={:>3d} ] = {:0.3f}'
     titleStr = 'Average Precision' if ap == 1 else 'Average Recall'

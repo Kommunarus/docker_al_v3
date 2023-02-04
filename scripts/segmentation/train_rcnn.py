@@ -105,12 +105,13 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
     best_validation_dsc = 0.0
     best_model = None
     epochs = 1000
-    lr = 5e-5
+    lr = 5e-4
     score_threshold = 0
 
 
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.Adam(params, lr=lr)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
 
     earling = 0
 
@@ -124,13 +125,13 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
 
             optimizer.zero_grad()
 
+            # print(targets)
             loss_dict = model(images, targets)
             losses = sum(loss for loss in loss_dict.values())
             total_loss += losses.item()
 
             losses.backward()
             optimizer.step()
-            # lr_scheduler.step()
         if epoch % 5 == 0 and epoch != 0:
             print(total_loss)
             # iter_val = iter(loader_val)
@@ -152,8 +153,11 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
                 earling = 0
             else:
                 earling += 1
+            print('best mape {:.03f}'.format(best_validation_dsc))
         if earling == 10:
             pass
+        lr_scheduler.step()
+
             # break
 
     # test
@@ -216,7 +220,7 @@ def find_err(unet, path_to_images, ids, n_gpu):
 
 
 if __name__ == '__main__':
-    path_to_images = '/home/neptun/PycharmProjects/datasets/data-science-bowl-2018/stage1_train'
-    path_to_split = '/home/neptun/PycharmProjects/datasets/data-science-bowl-2018/al'
+    path_to_images = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/stage1_train'
+    path_to_split = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/al'
     n_gpu = 0
     train_al(path_to_images, path_to_split, n_gpu, ploting=False)

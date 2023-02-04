@@ -78,7 +78,8 @@ class Dataset_mask(Dataset):
                 xmax = np.max(pos[1])
                 ymin = np.min(pos[0])
                 ymax = np.max(pos[0])
-                boxes.append([xmin, ymin, xmax, ymax])
+                if ymax - ymin > 0 and xmax - xmin > 0:
+                    boxes.append([xmin, ymin, xmax, ymax])
             boxes = torch.as_tensor(boxes, dtype=torch.float32)
             labels = torch.ones((num_objs,), dtype=torch.int64)
             masks = torch.as_tensor(transformed_mask, dtype=torch.uint8)
