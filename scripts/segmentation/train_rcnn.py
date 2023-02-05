@@ -97,7 +97,7 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
 
     param_val = dict()
     param_val['pathdataset'] = path_to_images
-    param_val['batch_size'] = 1
+    param_val['batch_size'] = 16
     param_val['img'] = val_img
     loader_val = data_loaders(param_val, shuffle=True)
 
@@ -116,6 +116,12 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
 
     earling = 0
+
+    segm = True
+    if not segm:
+        metric = MeanAveragePrecision(iou_type='bbox')
+    else:
+        metric = MeanAveragePrecision(iou_type='segm')
 
     for epoch in range(epochs):
         model.train()
@@ -137,49 +143,44 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
             losses.backward()
             optimizer.step()
         if epoch % 5 == 0 and epoch != 0:
-            print(total_loss)
-            model.eval()
-            model.to(device_val)
-            segm = True
-            all_mape = []
-            for data in loader_val:
-                images, targets = data
-                images = list(image.to(device_val) for image in images)
-                targets = [{k: v.to(device_val) for k, v in t.items()} for t in targets]
+            with torch.no_grad():
+                print(total_loss)
+                model.eval()
+                model.to(device_val)
+                all_mape = []
+                for data in loader_val:
+                    images, targets = data
+                    images = list(image.to(device_val) for image in images)
+                    targets = [{k: v.to(device_val) for k, v in t.items()} for t in targets]
 
-                out = model(images)
+                    out = model(images)
 
-                pred_map = []
-                target_map = []
-                pred_map.append({'boxes': out[0]['boxes'],
-                                 'scores': out[0]['scores'],
-                                 'labels': out[0]['labels'],
-                                 'masks': (out[0]['masks'][:, 0] > 0.5)})
+                    pred_map = []
+                    target_map = []
+                    for r in range(len(images)):
+                        pred_map.append({'boxes': out[r]['boxes'],
+                                 'scores': out[r]['scores'],
+                                 'labels': out[r]['labels'],
+                                 'masks': (out[r]['masks'][:, 0] > 0.5)})
+                        target_map.append({'boxes': targets[r]['boxes'],
+                                    'labels': targets[r]['labels'],
+                                    'masks': (targets[r]['masks'] > 0.5)})
 
-                target_map.append({'boxes': targets[0]['boxes'],
-                                   'labels': targets[0]['labels'],
-                                   'masks': (targets[0]['masks'] > 0.5)})
 
-                if not segm:
-                    metric = MeanAveragePrecision(iou_type='bbox')
-                else:
-                    metric = MeanAveragePrecision(iou_type='segm')
+                    metric.update(pred_map, target_map)
 
-                metric.update(pred_map, target_map)
-                out = metric.compute()
+                    all_mape.append(out['map'].item())
 
-                all_mape.append(out['map'].item())
-
-            metr_s = sum(all_mape) / len(all_mape)
+            metr_s = sum(all_mape)
 
             if metr_s > best_validation_dsc:
                 best_validation_dsc = metr_s
                 best_model = copy.deepcopy(model)
                 torch.save(model, 'rcnn.pth')
                 earling = 0
+                print('best mape {:.03f}'.format(best_validation_dsc))
             else:
                 earling += 1
-            print('best mape {:.03f}'.format(best_validation_dsc))
         if earling == 10:
             pass
         lr_scheduler.step()
