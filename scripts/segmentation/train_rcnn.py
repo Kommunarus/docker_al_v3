@@ -13,11 +13,13 @@ import copy
 from scripts.segmentation.model_rcnn import get_model_instance_segmentation
 import utils
 
-from scripts.segmentation.engine import evaluate
-from scripts.segmentation.eval import _summarize
+from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
-def data_loaders(param, test=False, shuffle=True):
-    dataset_train = datasets(param, test)
+# from scripts.segmentation.engine import evaluate
+# from scripts.segmentation.eval import _summarize
+
+def data_loaders(param, test=False, shuffle=True, usetransform=True):
+    dataset_train = datasets(param, test, usetransform)
 
     loader_train = DataLoader(
         dataset_train,
@@ -26,8 +28,8 @@ def data_loaders(param, test=False, shuffle=True):
 
     return loader_train
 
-def datasets(parametres, test):
-    train = Dataset(parametres['pathdataset'], parametres['img'], test)
+def datasets(parametres, test, usetransform):
+    train = Dataset(parametres['pathdataset'], parametres['img'], test, usetransform)
     return train
 
 def plot_train(model, images, targets, images_val, targets_val, score_threshold):
@@ -71,6 +73,7 @@ def plot_train(model, images, targets, images_val, targets_val, score_threshold)
 def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
     num_classes = 2
     device = torch.device("cpu" if not torch.cuda.is_available() else f'cuda:{n_gpu}')
+    device_val = torch.device('cuda:0' if n_gpu == 1 else 'cuda:1')
 
     param_train = dict()
     param_train['pathdataset'] = path_to_images
@@ -100,7 +103,6 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
 
     model = get_model_instance_segmentation(num_classes)
 
-    model.to(device)
 
     best_validation_dsc = 0.0
     best_model = None
@@ -117,6 +119,8 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
 
     for epoch in range(epochs):
         model.train()
+        model.to(device)
+
         total_loss = 0
         for data in loader_train:
             images, targets = data
@@ -134,18 +138,40 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
             optimizer.step()
         if epoch % 5 == 0 and epoch != 0:
             print(total_loss)
-            # iter_val = iter(loader_val)
-            # data_val = next(iter_val)
-            # images_val, targets_val = data_val
-            # images_val = list(image.to(device) for image in images_val)
-            # targets_val = [{k: v.to(device) for k, v in t.items()} for t in targets_val]
+            model.eval()
+            model.to(device_val)
+            segm = True
+            all_mape = []
+            for data in loader_val:
+                images, targets = data
+                images = list(image.to(device_val) for image in images)
+                targets = [{k: v.to(device_val) for k, v in t.items()} for t in targets]
 
-            # plot_train(model, images, targets, images_val, targets_val, score_threshold)
-            val = evaluate(model, loader_val, device=device)
-            print('segmentation', end=' ')
-            metr_s = _summarize(val.coco_eval['segm'])
-            print('box', end=' ')
-            _summarize(val.coco_eval['bbox'])
+                out = model(images)
+
+                pred_map = []
+                target_map = []
+                pred_map.append({'boxes': out[0]['boxes'],
+                                 'scores': out[0]['scores'],
+                                 'labels': out[0]['labels'],
+                                 'masks': (out[0]['masks'][:, 0] > 0.5)})
+
+                target_map.append({'boxes': targets[0]['boxes'],
+                                   'labels': targets[0]['labels'],
+                                   'masks': (targets[0]['masks'] > 0.5)})
+
+                if not segm:
+                    metric = MeanAveragePrecision(iou_type='bbox')
+                else:
+                    metric = MeanAveragePrecision(iou_type='segm')
+
+                metric.update(pred_map, target_map)
+                out = metric.compute()
+
+                all_mape.append(out['map'].item())
+
+            metr_s = sum(all_mape) / len(all_mape)
+
             if metr_s > best_validation_dsc:
                 best_validation_dsc = metr_s
                 best_model = copy.deepcopy(model)

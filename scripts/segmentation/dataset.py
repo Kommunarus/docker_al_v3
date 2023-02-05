@@ -20,11 +20,13 @@ import matplotlib.patches as patches
 # ])
 
 class Dataset_mask(Dataset):
-    def __init__(self, path_to_dataset, id_images, test=False):
+    def __init__(self, path_to_dataset, id_images, test=False, usetransform=True):
         self.data = {}
         self.path_to_dataset = path_to_dataset
         self.indxx = []
         self.use_mask = not test
+        self.usetransform = usetransform
+
         for idx in id_images:
             file1 = os.path.join(path_to_dataset, idx, 'images')
             files = os.listdir(file1)
@@ -65,10 +67,15 @@ class Dataset_mask(Dataset):
                 ma = ma.resize((224, 224))
                 mask.append(np.array(ma))
 
-            transformed = self.transform(image=np_arr, masks=mask)
-            transformed_image = transformed['image']
-            transformed_mask = transformed['masks']
-            transformed_mask = np.stack(transformed_mask, 0) / 255
+            if self.usetransform:
+                transformed = self.transform(image=np_arr, masks=mask)
+                transformed_image = transformed['image']
+                transformed_mask = transformed['masks']
+                transformed_mask = np.stack(transformed_mask, 0) / 255
+            else:
+                transformed_image = np_arr
+                transformed_mask = np.stack(mask, 0) / 255
+
 
             num_objs = len(transformed_mask)
             boxes = []

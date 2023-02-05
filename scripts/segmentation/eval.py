@@ -1,36 +1,95 @@
 import numpy as np
+import torch
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import PIL.Image as Image
+import os
+from scripts.segmentation.train_rcnn import data_loaders
+from torchmetrics.detection.mean_ap import MeanAveragePrecision
+from torchvision.utils import draw_segmentation_masks
+
+def inference(ids, segm, usetransform):
+    path_to_dir = '/home/neptun/PycharmProjects/datasets/data-science-bowl-2018/stage1_train'
+    score_threshold = 0.8
+    model = torch.load('rcnn_dl.pth')
+    device = torch.device("cpu" if not torch.cuda.is_available() else 'cuda')
+    param_train = dict()
+    param_train['pathdataset'] = path_to_dir
+    param_train['batch_size'] = 1
+    param_train['img'] = ids
+    loader_train = data_loaders(param_train, test=False, usetransform=usetransform)
+    model.to(device)
+
+    pred_map = []
+    target_map = []
+
+    for data in loader_train:
+        images, targets = data
+        images = list(image.to(device) for image in images)
+        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+
+        out = model(images)
+
+        pred_map.append({'boxes': out[0]['boxes'],
+              'scores': out[0]['scores'],
+              'labels': out[0]['labels'],
+              'masks': (out[0]['masks'][:, 0] > 0.5)})
+
+        target_map.append({'boxes': targets[0]['boxes'],
+               'labels':targets[0]['labels'],
+               'masks': (targets[0]['masks'] > 0.5)})
+
+    if not segm:
+        fig, ax = plt.subplots()
+        ax.imshow(torch.movedim(images[0].cpu(), 0, 2))
+
+        for row in range(out[0]['boxes'].shape[0]):
+            if out[0]['scores'][row] > score_threshold:
+                bbox = out[0]['boxes'][row].cpu().detach().numpy()
+                rect = patches.Rectangle((bbox[0], bbox[1]), (bbox[2]-bbox[0]), (bbox[3]-bbox[1]), linewidth=1,
+                                         edgecolor='r',  facecolor='none')
+                ax.add_patch(rect)
+        ax.set_axis_off()
+        plt.savefig('img.jpg', bbox_inches='tight')
 
 
-def _summarize(coco, ap=1, iouThr=None, areaRng='all', maxDets=100):
-    p = coco.params
-    iStr = ' {:<18} {} @[ IoU={:<9} | area={:>6s} | maxDets={:>3d} ] = {:0.3f}'
-    titleStr = 'Average Precision' if ap == 1 else 'Average Recall'
-    typeStr = '(AP)' if ap == 1 else '(AR)'
-    iouStr = '{:0.2f}:{:0.2f}'.format(p.iouThrs[0], p.iouThrs[-1]) \
-        if iouThr is None else '{:0.2f}'.format(iouThr)
-
-    aind = [i for i, aRng in enumerate(p.areaRngLbl) if aRng == areaRng]
-    mind = [i for i, mDet in enumerate(p.maxDets) if mDet == maxDets]
-    if ap == 1:
-        # dimension of precision: [TxRxKxAxM]
-        s = coco.eval['precision']
-        # IoU
-        if iouThr is not None:
-            t = np.where(iouThr == p.iouThrs)[0]
-            s = s[t]
-        s = s[:, :, :, aind, mind]
+        fig, ax = plt.subplots()
+        ax.imshow(torch.movedim(images[0].cpu(), 0, 2))
+        for row in range(targets[0]['boxes'].shape[0]):
+            bbox = targets[0]['boxes'][row].cpu()
+            rect = patches.Rectangle((bbox[0], bbox[1]), (bbox[2] - bbox[0]), (bbox[3] - bbox[1]), linewidth=1,
+                                     edgecolor='g',
+                                     facecolor='none')
+            ax.add_patch(rect)
+        ax.set_axis_off()
+        plt.savefig('img_tr.jpg', bbox_inches='tight')
+        fig.clf()
+        plt.close('all')
     else:
-        # dimension of recall: [TxKxAxM]
-        s = coco.eval['recall']
-        if iouThr is not None:
-            t = np.where(iouThr == p.iouThrs)[0]
-            s = s[t]
-        s = s[:, :, aind, mind]
-    if len(s[s > -1]) == 0:
-        mean_s = -1
+        fig, ax = plt.subplots()
+        img = (255*images[0]).cpu().to(torch.uint8)
+        img = draw_segmentation_masks(img, (out[0]['masks'] > 0.5)[:, 0], alpha=0.8,)
+        ax.imshow(torch.movedim(img, 0, 2))
+        ax.set_axis_off()
+        plt.savefig('img.jpg', bbox_inches='tight')
+
+
+        fig, ax = plt.subplots()
+        img = (255*images[0]).cpu().to(torch.uint8)
+        img = draw_segmentation_masks(img, targets[0]['masks']>0.5, alpha=0.8)
+        ax.imshow(torch.movedim(img, 0, 2))
+        ax.set_axis_off()
+        plt.savefig('img_tr.jpg', bbox_inches='tight')
+
+        fig.clf()
+        plt.close('all')
+
+    # mape
+
+    if not segm:
+        metric = MeanAveragePrecision(iou_type='bbox')
     else:
-        mean_s = np.mean(s[s > -1])
-    print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s))
-    return mean_s
-
-
+        metric = MeanAveragePrecision(iou_type='segm')
+    metric.update(pred_map, target_map)
+    out = metric.compute()
+    return out
