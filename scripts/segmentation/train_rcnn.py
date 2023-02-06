@@ -107,13 +107,13 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
     best_validation_dsc = 0.0
     best_model = None
     epochs = 1000
-    lr = 5e-4
+    lr = 1e-4
     score_threshold = 0
 
 
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.Adam(params, lr=lr)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.5)
 
     earling = 0
 
@@ -142,7 +142,8 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
 
             losses.backward()
             optimizer.step()
-        if epoch % 5 == 0 and epoch != 0:
+        if True:
+        # if epoch % 5 == 0 and epoch != 0:
             with torch.no_grad():
                 print(total_loss)
                 model.eval()
@@ -168,21 +169,24 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
 
 
                     metric.update(pred_map, target_map)
+                    out = metric.compute()
 
-                    all_mape.append(out['map'].item())
+                    all_mape.append(out['map'].item() * len(images) / len(loader_val.dataset))
 
             metr_s = sum(all_mape)
 
-            if metr_s > best_validation_dsc:
+            if metr_s >= best_validation_dsc:
                 best_validation_dsc = metr_s
                 best_model = copy.deepcopy(model)
                 torch.save(model, 'rcnn.pth')
                 earling = 0
-                print('best mape {:.03f}'.format(best_validation_dsc))
+                print('best mape {:.03f} in epoch {}'.format(best_validation_dsc, epoch))
             else:
+                print('mape {:.03f}'.format(metr_s))
                 earling += 1
-        if earling == 10:
-            pass
+        if earling == 20:
+            print('stop on {} epoch'.format(epoch+1))
+            break
         lr_scheduler.step()
 
             # break

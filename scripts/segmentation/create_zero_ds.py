@@ -8,7 +8,7 @@ all_images = os.listdir(path_images)
 
 train, val = train_test_split(all_images, test_size=100)
 
-zero = random.sample(train, k=3)
+zero = random.sample(train, k=100)
 
 with open('/home/alex/PycharmProjects/dataset/data-science-bowl-2018/al/train/train.txt', 'w') as f:
     for name in zero:
