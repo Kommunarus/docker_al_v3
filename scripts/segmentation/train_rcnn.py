@@ -2,7 +2,7 @@ import os
 import random
 import torch
 from tqdm import tqdm
-
+import numpy as np
 from torch.utils.data import DataLoader
 
 from dataset import Dataset_mask as Dataset
@@ -15,8 +15,6 @@ import utils
 
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
-# from scripts.segmentation.engine import evaluate
-# from scripts.segmentation.eval import _summarize
 
 def data_loaders(param, test=False, shuffle=True, usetransform=True):
     dataset_train = datasets(param, test, usetransform)
@@ -106,7 +104,7 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
 
     best_validation_dsc = 0.0
     best_model = None
-    epochs = 1000
+    epochs = 300
     lr = 1e-4
     score_threshold = 0
 
@@ -117,11 +115,6 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
 
     earling = 0
 
-    segm = True
-    if not segm:
-        metric = MeanAveragePrecision(iou_type='bbox')
-    else:
-        metric = MeanAveragePrecision(iou_type='segm')
 
     for epoch in range(epochs):
         model.train()
@@ -142,10 +135,11 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
 
             losses.backward()
             optimizer.step()
-        if True:
-        # if epoch % 5 == 0 and epoch != 0:
+        # if True:
+        if epoch % 5 == 0 and epoch != 0:
+        # if epoch == epochs - 1:
             with torch.no_grad():
-                print(total_loss)
+                # print(total_loss)
                 model.eval()
                 model.to(device_val)
                 all_mape = []
@@ -167,7 +161,11 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
                                     'labels': targets[r]['labels'],
                                     'masks': (targets[r]['masks'] > 0.5)})
 
-
+                    segm = True
+                    if not segm:
+                        metric = MeanAveragePrecision(iou_type='bbox')
+                    else:
+                        metric = MeanAveragePrecision(iou_type='segm')
                     metric.update(pred_map, target_map)
                     out = metric.compute()
 
@@ -180,12 +178,12 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
                 best_model = copy.deepcopy(model)
                 torch.save(model, 'rcnn.pth')
                 earling = 0
-                print('best mape {:.03f} in epoch {}'.format(best_validation_dsc, epoch))
+                # print('best mape {:.03f} in epoch {}'.format(best_validation_dsc, epoch))
             else:
-                print('mape {:.03f}'.format(metr_s))
+                # print('mape {:.03f}'.format(metr_s))
                 earling += 1
-        if earling == 20:
-            print('stop on {} epoch'.format(epoch+1))
+        if earling == 10:
+            # print('stop on {} epoch'.format(epoch+1))
             break
         lr_scheduler.step()
 
@@ -206,7 +204,7 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
     return best_model, best_validation_dsc
 
 
-def find_err(unet, path_to_images, ids, n_gpu):
+def find_err(model, path_to_images, ids, n_gpu):
     param_test = dict()
     param_test['pathdataset'] = path_to_images
     param_test['batch_size'] = 16
@@ -215,37 +213,26 @@ def find_err(unet, path_to_images, ids, n_gpu):
     loader_test = data_loaders(param_test, test=True)
     device = torch.device("cpu" if not torch.cuda.is_available() else f'cuda:{n_gpu}')
 
-    unet.eval()
+    model.eval()
+    model.to(device)
     ids = []
     mag = []
-    for i, data in enumerate(loader_test):
-        x, id = data
-        x = x.to(device)
-        y_pred = unet(x)
-        vpred = y_pred[:, 0]
+    with torch.no_grad():
+        for i, data in enumerate(loader_test):
+            x, id = data
+            images = list(image.to(device) for image in x)
+            y_pred = model(images)
 
-        # 1
-        v1pred = 1 - vpred
-        margin = 1 - (torch.abs(vpred - v1pred))
-        marg_i = torch.mean(margin, (1, 2))
+            vpred = torch.tensor([torch.mean(x['scores']).item() if len(x['scores']) > 0 else 0 for x in y_pred])
 
-        # 2
-        # vpred[vpred > 0.7] = 1
-        # vpred[vpred < 0.3] = 0
-        # v1pred = 1 - vpred
-        # margin = 1 - (torch.abs(vpred - v1pred))
-        # marg_i = torch.mean(margin, (1, 2))
+            v1pred = 1 - vpred
+            marg_i = 1 - (torch.abs(vpred - v1pred))
 
-        # 3
-        # T_03_07 = ((vpred > 0.4) & (vpred < 0.6)).float()
-        # T_07_1 = (vpred >= 0.7).float()
-        # marg_i = torch.sum(T_03_07, (1, 2)) / 224**2
-
-        ids = ids + id.tolist()
-        mag = mag + marg_i.tolist()
-        # margin_img = margin.view(-1, 1, 224, 224)
-    err = [(loader_test.dataset.indxx[i], e) for i, e in zip(ids, mag)]
-    err2 = sorted(err, key=lambda x: x[1])
+            ids = ids + list(id)
+            mag = mag + marg_i.tolist()
+            # margin_img = margin.view(-1, 1, 224, 224)
+        err = [(loader_test.dataset.indxx[i], e) for i, e in zip(ids, mag)]
+        err2 = sorted(err, key=lambda x: x[1])
     return err2
 
 

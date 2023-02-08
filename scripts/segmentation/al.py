@@ -1,6 +1,6 @@
 import os
-from scripts.segmentation.train_unet import find_err
-from scripts.segmentation.train_unet import train_al, eval
+from scripts.segmentation.train_rcnn import find_err
+from scripts.segmentation.train_rcnn import train_al
 import matplotlib.pyplot as plt
 import PIL.Image as Image
 
