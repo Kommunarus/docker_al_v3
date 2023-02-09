@@ -95,7 +95,7 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
 
     param_val = dict()
     param_val['pathdataset'] = path_to_images
-    param_val['batch_size'] = 16
+    param_val['batch_size'] = 8
     param_val['img'] = val_img
     loader_val = data_loaders(param_val, shuffle=True)
 
@@ -203,6 +203,22 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
 
     return best_model, best_validation_dsc
 
+def ensemble(n, path_to_images, path_to_split, n_gpu):
+    models = []
+    path_dir_models = './models'
+    old_model = os.listdir(path_dir_models)
+    for m in old_model:
+        os.remove(os.path.join(path_dir_models, m))
+    vv = []
+    for i in range(n):
+        best_model, score = train_al(path_to_images, path_to_split, n_gpu)
+        path_model = os.path.join(path_dir_models, f'model {i+1}.pth')
+        torch.save(best_model, path_model)
+        models.append(path_model)
+        vv.append(score)
+
+    return models, sum(vv) / len(vv)
+
 
 def find_err(model, path_to_images, ids, n_gpu):
     param_test = dict()
@@ -259,10 +275,73 @@ def find_err(model, path_to_images, ids, n_gpu):
         err2 = sorted(err, key=lambda x: x[1])
     return err2
 
+def ensemble_find_err(models, path_to_images, ids, n_gpu):
+    param_test = dict()
+    param_test['pathdataset'] = path_to_images
+    param_test['batch_size'] = 16
+    param_test['img'] = ids
 
+    loader_test = data_loaders(param_test, test=True, shuffle=False)
+    device = torch.device("cpu" if not torch.cuda.is_available() else f'cuda:{n_gpu}')
+    maskss = {}
+    for path_model in models:
+        model = torch.load(path_model)
+        model.eval()
+        model.to(device)
+        with torch.no_grad():
+            for i, data in enumerate(loader_test):
+                x, id = data
+                images = list(image.to(device) for image in x)
+                y_pred = model(images)
+
+                koef_box = []
+                koef_mask = []
+                for image_in_batch in range(len(y_pred)):
+                    score_box = y_pred[image_in_batch]['scores']
+                    mask = y_pred[image_in_batch]['masks']
+                    box = y_pred[image_in_batch]['boxes']
+
+                    t1 = (score_box * (mask > 0.5).int()[:, 0].view(224, 224, -1)).view(-1, 224, 224)
+
+                    total_mask = torch.max(t1, 0)[0].cpu().numpy()
+                    nnn = loader_test.dataset.indxx[id[image_in_batch]]
+                    if maskss.get(nnn) is None:
+                        maskss[nnn] = [total_mask]
+                    else:
+                        e = maskss[nnn]
+                        new_e = e + [total_mask, ]
+                        maskss[nnn] = new_e
+
+    mag = []
+    mig = []
+    for k, v in maskss.items():
+        koeff = 1 - fI(v) / OI(v)
+        mag.append(koeff)
+        mig.append(k)
+    err = [(i, e) for i, e in zip(mig, mag)]
+    err2 = sorted(err, key=lambda x: x[1])
+    return err2
+
+def fI(masks):
+    s1 = np.prod(np.array(masks), 0)
+    s2 = np.log(s1)
+    s3 = s2 / len(masks)
+    x = np.exp(s3)
+    out = (x > 0.5).sum()
+    return out
+
+def OI(masks):
+    s1 = np.max(np.array(masks), 0)
+    out = (s1 > 0.5).sum()
+    return out
 
 if __name__ == '__main__':
-    path_to_images = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/stage1_train'
-    path_to_split = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/al'
+    path_to_images = '/home/neptun/PycharmProjects/datasets/data-science-bowl-2018/stage1_train'
+    path_to_split = '/home/neptun/PycharmProjects/datasets/data-science-bowl-2018/al'
     n_gpu = 0
-    train_al(path_to_images, path_to_split, n_gpu, ploting=False)
+    # train_al(path_to_images, path_to_split, n_gpu, ploting=False)
+    # models = ensemble(2, path_to_images, path_to_split, n_gpu)
+    models = ['./models/model 1.pth', './models/model 2.pth']
+    ids = ['0bf33d3db4282d918ec3da7112d0bf0427d4eafe74b3ee0bb419770eefe8d7d6',
+           '6af82abb29539000be4696884fc822d3cafcb2105906dc7582c92dccad8948c5']
+    ensemble_find_err(models, path_to_images, ids, n_gpu)

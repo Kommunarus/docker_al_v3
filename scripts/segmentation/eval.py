@@ -9,7 +9,7 @@ from torchmetrics.detection.mean_ap import MeanAveragePrecision
 from torchvision.utils import draw_segmentation_masks
 
 def inference(ids, segm, usetransform):
-    path_to_dir = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/stage1_train'
+    path_to_dir = '/home/neptun/PycharmProjects/datasets/data-science-bowl-2018/stage1_train'
     score_threshold = 0.8
     model = torch.load('rcnn_s.pth')
     device = torch.device("cpu" if not torch.cuda.is_available() else 'cuda:1')

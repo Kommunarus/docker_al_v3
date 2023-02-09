@@ -107,7 +107,7 @@ class UiForm(QtWidgets.QWidget):
 
 
 if __name__ == '__main__':
-    path_to_dir = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/stage1_train'
+    path_to_dir = '/home/neptun/PycharmProjects/datasets/data-science-bowl-2018/stage1_train'
     app = QtWidgets.QApplication(sys.argv)
     form = UiForm()
     form.setFixedSize(850, 720)
