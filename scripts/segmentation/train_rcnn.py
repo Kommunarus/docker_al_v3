@@ -111,7 +111,7 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
 
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.Adam(params, lr=lr)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.5)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=15, gamma=0.5)
 
     earling = 0
 
@@ -176,13 +176,13 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
             if metr_s >= best_validation_dsc:
                 best_validation_dsc = metr_s
                 best_model = copy.deepcopy(model)
-                torch.save(model, 'rcnn.pth')
+                # torch.save(model, 'rcnn.pth')
                 earling = 0
                 # print('best mape {:.03f} in epoch {}'.format(best_validation_dsc, epoch))
             else:
                 # print('mape {:.03f}'.format(metr_s))
                 earling += 1
-        if earling == 10:
+        if earling == 5:
             # print('stop on {} epoch'.format(epoch+1))
             break
         lr_scheduler.step()
@@ -217,7 +217,7 @@ def ensemble(n, path_to_images, path_to_split, n_gpu):
         models.append(path_model)
         vv.append(score)
 
-    return models, sum(vv) / len(vv)
+    return models, vv
 
 
 def find_err(model, path_to_images, ids, n_gpu):
@@ -324,7 +324,7 @@ def ensemble_find_err(models, path_to_images, ids, n_gpu):
 
 def fI(masks):
     s1 = np.prod(np.array(masks), 0)
-    s2 = np.log(s1)
+    s2 = np.log(s1 + 0.01)
     s3 = s2 / len(masks)
     x = np.exp(s3)
     out = (x > 0.5).sum()

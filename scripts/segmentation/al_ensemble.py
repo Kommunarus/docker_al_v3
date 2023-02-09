@@ -22,10 +22,11 @@ def plot_img(path, listik, score, score2, pred_mask):
     plt.show()
 
 if __name__ == '__main__':
-    path1 = '/home/neptun/PycharmProjects/datasets/data-science-bowl-2018/stage1_train'
-    path2 = '/home/neptun/PycharmProjects/datasets/data-science-bowl-2018/al'
+    path1 = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/stage1_train'
+    path2 = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/al'
     n_gpu = 1
     N = 3
+    num_ens = 5
 
     all_id = os.listdir(path1)
     for opyt in range(10):
@@ -43,7 +44,7 @@ if __name__ == '__main__':
                         for line in f.readlines():
                             use_img.append(line.strip())
 
-            models, score = ensemble(3, path1, path2, n_gpu=n_gpu)
+            models, score = ensemble(num_ens, path1, path2, n_gpu=n_gpu)
             print(score, end=' ')
             sc.append(score)
 
@@ -58,7 +59,7 @@ if __name__ == '__main__':
             # pred_mask_al = eval(model, path1, out2, n_gpu=1)
             # plot_img(path1, out2, score, score2, pred_mask_al)
         else:
-            model, score = ensemble(3, path1, path2, n_gpu=n_gpu)
+            model, score = ensemble(num_ens, path1, path2, n_gpu=n_gpu)
             sc.append(score)
 
         print(opyt, sc)
