@@ -222,14 +222,38 @@ def find_err(model, path_to_images, ids, n_gpu):
             x, id = data
             images = list(image.to(device) for image in x)
             y_pred = model(images)
+            koef_box = []
+            koef_mask = []
+            for row in range(len(y_pred)):
+                score_box = y_pred[row]['scores']
+                k = (score_box < 0.8).sum() / len(score_box)
+                koef_box.append(k.item())
 
-            vpred = torch.tensor([torch.mean(x['scores']).item() if len(x['scores']) > 0 else 0 for x in y_pred])
+                mask = y_pred[row]['masks']
+                b = []
+                for j in range(mask.shape[0]):
+                    cur_mask = mask[j, 0]
+                    total = torch.nonzero(cur_mask).shape[0]
+                    k = (total - (cur_mask > 0.7).sum()) / total
+                    # k = (cur_mask < 0.8).sum() / torch.nonzero(cur_mask).shape[0]
+                    b.append(k.item())
 
-            v1pred = 1 - vpred
-            marg_i = 1 - (torch.abs(vpred - v1pred))
+                if len(b) == 0:
+                    koef_mask.append(0)
+                else:
+                    # koef_mask.append(sum(b))
+                    koef_mask.append(sum(b) / len(b))
+
+
+
+            # vpred = torch.tensor([x * y for x, y in zip(koef_box, koef_mask)])
+            vpred = torch.tensor(koef_box)
+
+            # v1pred = 1 - vpred
+            # marg_i = 1 - (torch.abs(vpred - v1pred))
 
             ids = ids + list(id)
-            mag = mag + marg_i.tolist()
+            mag = mag + vpred.tolist()
             # margin_img = margin.view(-1, 1, 224, 224)
         err = [(loader_test.dataset.indxx[i], e) for i, e in zip(ids, mag)]
         err2 = sorted(err, key=lambda x: x[1])

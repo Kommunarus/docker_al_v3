@@ -44,7 +44,7 @@ if __name__ == '__main__':
                             use_img.append(line.strip())
 
             model, score = train_al(path1, path2, n_gpu=n_gpu)
-            # print(score)
+            print(score, end=' ')
             sc.append(score)
 
             not_label = list(set(all_id) - set(use_img))

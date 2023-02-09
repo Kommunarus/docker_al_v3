@@ -11,8 +11,8 @@ from torchvision.utils import draw_segmentation_masks
 def inference(ids, segm, usetransform):
     path_to_dir = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/stage1_train'
     score_threshold = 0.8
-    model = torch.load('rcnn.pth')
-    device = torch.device("cpu" if not torch.cuda.is_available() else 'cuda')
+    model = torch.load('rcnn_s.pth')
+    device = torch.device("cpu" if not torch.cuda.is_available() else 'cuda:1')
     param_train = dict()
     param_train['pathdataset'] = path_to_dir
     param_train['batch_size'] = 1
