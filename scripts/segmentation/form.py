@@ -60,7 +60,9 @@ class UiForm(QtWidgets.QWidget):
         self.setLayout(self.vbox)
 
     def on_show(self, id):
-        mape = inference([id, ], self.type.checkState().value, False)
+        namemodel = './rcnn_s.pth'
+        namefile = './img.jpg'
+        mape, _, _ = inference([id, ], self.type.checkState().value, False, namemodel, namefile, True)
         self.graphicsView_2.setPixmap(QtGui.QPixmap('./img.jpg'))
         self.graphicsView_2.show()
 
@@ -107,7 +109,7 @@ class UiForm(QtWidgets.QWidget):
 
 
 if __name__ == '__main__':
-    path_to_dir = '/home/neptun/PycharmProjects/datasets/data-science-bowl-2018/stage1_train'
+    path_to_dir = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/stage1_train'
     app = QtWidgets.QApplication(sys.argv)
     form = UiForm()
     form.setFixedSize(850, 720)

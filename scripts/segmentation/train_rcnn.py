@@ -206,18 +206,21 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
 def ensemble(n, path_to_images, path_to_split, n_gpu):
     models = []
     path_dir_models = './models'
+    path_dir_models_copy = './copy model'
     old_model = os.listdir(path_dir_models)
     for m in old_model:
         os.remove(os.path.join(path_dir_models, m))
     vv = []
     for i in range(n):
         best_model, score = train_al(path_to_images, path_to_split, n_gpu)
-        path_model = os.path.join(path_dir_models, f'model {i+1}.pth')
-        torch.save(best_model, path_model)
-        models.append(path_model)
+        path_model1 = os.path.join(path_dir_models, f'model {i+1}.pth')
+        torch.save(best_model, path_model1)
+        path_model2 = os.path.join(path_dir_models_copy, f'model {i+1}.pth')
+        torch.save(best_model, path_model2)
+        models.append(path_model1)
         vv.append(score)
 
-    return models, vv
+    return models, sum(vv)/len(vv), vv
 
 
 def find_err(model, path_to_images, ids, n_gpu):
@@ -300,8 +303,14 @@ def ensemble_find_err(models, path_to_images, ids, n_gpu):
                     score_box = y_pred[image_in_batch]['scores']
                     mask = y_pred[image_in_batch]['masks']
                     box = y_pred[image_in_batch]['boxes']
-
-                    t1 = (score_box * (mask > 0.5).int()[:, 0].view(224, 224, -1)).view(-1, 224, 224)
+                    areabox = (box[:, 2] - box[:, 0]) * (box[:, 3] - box[:, 1])
+                    score_box = score_box[areabox > 100]
+                    mask = mask[areabox > 100]
+                    if len(mask.shape) == 4:
+                        t1 = torch.movedim(score_box * torch.movedim(mask[:, 0], 0, 2), 2, 0)
+                        # t1 = (mask > 0.1)[:, 0].int()
+                    else:
+                        t1 = torch.zeros((1, 1, 224, 224)).to(int)
 
                     total_mask = torch.max(t1, 0)[0].cpu().numpy()
                     nnn = loader_test.dataset.indxx[id[image_in_batch]]
@@ -315,7 +324,13 @@ def ensemble_find_err(models, path_to_images, ids, n_gpu):
     mag = []
     mig = []
     for k, v in maskss.items():
-        koeff = 1 - fI(v) / OI(v)
+        a = fI(v)
+        b = OI(v)
+        if b == 0:
+            koeff = 0
+        else:
+            koeff = 1 - a / b
+
         mag.append(koeff)
         mig.append(k)
     err = [(i, e) for i, e in zip(mig, mag)]

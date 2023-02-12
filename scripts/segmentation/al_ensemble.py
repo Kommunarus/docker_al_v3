@@ -26,7 +26,7 @@ if __name__ == '__main__':
     path2 = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/al'
     n_gpu = 1
     N = 3
-    num_ens = 5
+    num_ens = 3
 
     all_id = os.listdir(path1)
     for opyt in range(10):
@@ -35,7 +35,7 @@ if __name__ == '__main__':
             if file.find('step') > -1:
                 os.remove(os.path.join(path2, 'train', file))
         sc = []
-        for n in range(8):
+        for n in range(10):
 
             use_img = []
             for type_file in ['train', 'val']:
@@ -44,7 +44,7 @@ if __name__ == '__main__':
                         for line in f.readlines():
                             use_img.append(line.strip())
 
-            models, score = ensemble(num_ens, path1, path2, n_gpu=n_gpu)
+            models, score, scores = ensemble(num_ens, path1, path2, n_gpu=n_gpu)
             print(score, end=' ')
             sc.append(score)
 
@@ -52,6 +52,7 @@ if __name__ == '__main__':
 
             err_not_lab = ensemble_find_err(models, path1, not_label, n_gpu=n_gpu)
             out = [err_not_lab[-i] for i in range(1, N*5, 5)]
+            # out = err_not_lab[-N:]
 
             save_id(out, path2, n)
             # out2 = [x[0] for x in out]
@@ -59,7 +60,7 @@ if __name__ == '__main__':
             # pred_mask_al = eval(model, path1, out2, n_gpu=1)
             # plot_img(path1, out2, score, score2, pred_mask_al)
         else:
-            model, score = ensemble(num_ens, path1, path2, n_gpu=n_gpu)
+            model, score, scores = ensemble(num_ens, path1, path2, n_gpu=n_gpu)
             sc.append(score)
 
         print(opyt, sc)
