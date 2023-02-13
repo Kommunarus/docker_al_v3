@@ -35,7 +35,7 @@ if __name__ == '__main__':
             if file.find('step') > -1:
                 os.remove(os.path.join(path2, 'train', file))
         sc = []
-        for n in range(10):
+        for n in range(8):
 
             use_img = []
             for type_file in ['train', 'val']:

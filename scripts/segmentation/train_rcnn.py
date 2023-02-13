@@ -26,9 +26,11 @@ def data_loaders(param, test=False, shuffle=True, usetransform=True):
 
     return loader_train
 
+
 def datasets(parametres, test, usetransform):
     train = Dataset(parametres['pathdataset'], parametres['img'], test, usetransform)
     return train
+
 
 def plot_train(model, images, targets, images_val, targets_val, score_threshold):
     model.eval()
@@ -203,6 +205,7 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
 
     return best_model, best_validation_dsc
 
+
 def ensemble(n, path_to_images, path_to_split, n_gpu):
     models = []
     path_dir_models = './models'
@@ -278,6 +281,7 @@ def find_err(model, path_to_images, ids, n_gpu):
         err2 = sorted(err, key=lambda x: x[1])
     return err2
 
+
 def ensemble_find_err(models, path_to_images, ids, n_gpu):
     param_test = dict()
     param_test['pathdataset'] = path_to_images
@@ -304,13 +308,16 @@ def ensemble_find_err(models, path_to_images, ids, n_gpu):
                     mask = y_pred[image_in_batch]['masks']
                     box = y_pred[image_in_batch]['boxes']
                     areabox = (box[:, 2] - box[:, 0]) * (box[:, 3] - box[:, 1])
-                    score_box = score_box[areabox > 100]
-                    mask = mask[areabox > 100]
-                    if len(mask.shape) == 4:
-                        t1 = torch.movedim(score_box * torch.movedim(mask[:, 0], 0, 2), 2, 0)
+                    big_bbox = (areabox > 100)
+                    score_box = score_box[big_bbox]
+                    mask = mask[big_bbox]
+
+                    if mask.shape[0] != 0 and len(mask.shape) == 4:
+                        # t1 = torch.movedim(score_box * torch.movedim(mask[:, 0], 0, 2), 2, 0)
                         # t1 = (mask > 0.1)[:, 0].int()
+                        t1 = mask[:, 0]
                     else:
-                        t1 = torch.zeros((1, 1, 224, 224)).to(int)
+                        t1 = torch.zeros((1, 224, 224)).to(int)
 
                     total_mask = torch.max(t1, 0)[0].cpu().numpy()
                     nnn = loader_test.dataset.indxx[id[image_in_batch]]
@@ -337,6 +344,7 @@ def ensemble_find_err(models, path_to_images, ids, n_gpu):
     err2 = sorted(err, key=lambda x: x[1])
     return err2
 
+
 def fI(masks):
     s1 = np.prod(np.array(masks), 0)
     s2 = np.log(s1 + 0.01)
@@ -345,10 +353,34 @@ def fI(masks):
     out = (x > 0.5).sum()
     return out
 
+
 def OI(masks):
     s1 = np.max(np.array(masks), 0)
     out = (s1 > 0.5).sum()
     return out
+
+
+def eval(model, path1, zero, n_gpu):
+    device = torch.device("cpu" if not torch.cuda.is_available() else f'cuda:{n_gpu}')
+    param_val = dict()
+    param_val['pathdataset'] = path1
+    param_val['batch_size'] = 8
+    param_val['img'] = zero
+    loader_val = data_loaders(param_val, shuffle=False)
+    with torch.no_grad():
+        # print(total_loss)
+        model.eval()
+        model.to(device)
+        all_mape = []
+        for data in loader_val:
+            images, targets = data
+            images = list(image.to(device) for image in images)
+            targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+
+            out = model(images)
+    return images, targets, out
+
+
 
 if __name__ == '__main__':
     path_to_images = '/home/neptun/PycharmProjects/datasets/data-science-bowl-2018/stage1_train'
