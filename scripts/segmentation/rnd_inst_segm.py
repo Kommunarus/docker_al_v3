@@ -25,10 +25,10 @@ if __name__ == '__main__':
                 val_img.append(line.strip())
 
     all_id = list(set(all_id) - set(val_img))
-    for num in [50, 100, 200, 300, 400]:
-    # for num in range(3, 28, 3):
+    # for num in [50, 100, 200, 300, 400]:
+    for num in range(3, 28, 3):
         meanscore = []
-        for n in range(5):
+        for n in range(10):
             sampl = random.sample(all_id, k=num)
 
             old_files = os.listdir(os.path.join(path2, 'train'))
@@ -39,7 +39,7 @@ if __name__ == '__main__':
                 for name in sampl:
                     f.write(name + '\n')
 
-            _, score = train_al(path1, path2, n_gpu=1)
+            _, score = train_al(path1, path2, n_gpu=0)
             print(num, score)
             meanscore.append(score)
         print(num, meanscore)

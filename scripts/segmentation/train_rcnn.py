@@ -97,16 +97,16 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
 
     param_val = dict()
     param_val['pathdataset'] = path_to_images
-    param_val['batch_size'] = 8
+    param_val['batch_size'] = 4
     param_val['img'] = val_img
     loader_val = data_loaders(param_val, shuffle=True)
 
     model = get_model_instance_segmentation(num_classes)
-
+    model.to(device)
 
     best_validation_dsc = 0.0
     best_model = None
-    epochs = 300
+    epochs = 50
     lr = 1e-4
     score_threshold = 0
 
@@ -138,17 +138,19 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
             losses.backward()
             optimizer.step()
         # if True:
-        if epoch % 5 == 0 and epoch != 0:
-        # if epoch == epochs - 1:
+        if epoch == epochs - 1:
+        # if epoch % 500 == 0 and epoch != 0:
+            # model.to(device_val)
+            model.eval()
+            # if epoch == epochs - 1:
             with torch.no_grad():
                 # print(total_loss)
-                model.eval()
-                model.to(device_val)
+                # model.to(device_val)
                 all_mape = []
                 for data in loader_val:
                     images, targets = data
-                    images = list(image.to(device_val) for image in images)
-                    targets = [{k: v.to(device_val) for k, v in t.items()} for t in targets]
+                    images = list(image.to(device) for image in images)
+                    targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
                     out = model(images)
 
@@ -184,24 +186,13 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
             else:
                 # print('mape {:.03f}'.format(metr_s))
                 earling += 1
+        # else:
+        #     best_model = copy.deepcopy(model)
+
         if earling == 5:
             # print('stop on {} epoch'.format(epoch+1))
             break
         lr_scheduler.step()
-
-            # break
-
-    # test
-    if ploting:
-        iter_b = iter(loader_val)
-        b, tr = next(iter_b)
-        out = best_model(b.to(device))
-        fig, axs = plt.subplots(param_train['batch_size'], 2, figsize=(5, 15))
-        for i in range(param_train['batch_size']):
-            axs[i, 0].imshow(tr[i, 0].cpu().detach().numpy())
-            axs[i, 1].imshow(out[i, 0].cpu().detach().numpy())
-        plt.show()
-    # print('best dice {}'.format(best_validation_dsc))
 
     return best_model, best_validation_dsc
 
@@ -229,10 +220,10 @@ def ensemble(n, path_to_images, path_to_split, n_gpu):
 def find_err(model, path_to_images, ids, n_gpu):
     param_test = dict()
     param_test['pathdataset'] = path_to_images
-    param_test['batch_size'] = 16
+    param_test['batch_size'] = 8
     param_test['img'] = ids
 
-    loader_test = data_loaders(param_test, test=True)
+    loader_test = data_loaders(param_test, test=True, shuffle=False)
     device = torch.device("cpu" if not torch.cuda.is_available() else f'cuda:{n_gpu}')
 
     model.eval()
@@ -244,38 +235,22 @@ def find_err(model, path_to_images, ids, n_gpu):
             x, id = data
             images = list(image.to(device) for image in x)
             y_pred = model(images)
-            koef_box = []
             koef_mask = []
             for row in range(len(y_pred)):
                 score_box = y_pred[row]['scores']
-                k = (score_box < 0.8).sum() / len(score_box)
-                koef_box.append(k.item())
-
                 mask = y_pred[row]['masks']
-                b = []
-                for j in range(mask.shape[0]):
-                    cur_mask = mask[j, 0]
-                    total = torch.nonzero(cur_mask).shape[0]
-                    k = (total - (cur_mask > 0.7).sum()) / total
-                    # k = (cur_mask < 0.8).sum() / torch.nonzero(cur_mask).shape[0]
-                    b.append(k.item())
-
-                if len(b) == 0:
-                    koef_mask.append(0)
-                else:
-                    # koef_mask.append(sum(b))
-                    koef_mask.append(sum(b) / len(b))
 
 
+                t = torch.nonzero(mask).shape[0]
+                t_high = (mask[:, 0] > 0.5).sum().item()
 
-            # vpred = torch.tensor([x * y for x, y in zip(koef_box, koef_mask)])
-            vpred = torch.tensor(koef_box)
+                k = 100*(t - t_high) / t / mask.shape[0] #* torch.mean(score_box).item()
+                koef_mask.append(k)
 
-            # v1pred = 1 - vpred
-            # marg_i = 1 - (torch.abs(vpred - v1pred))
+
 
             ids = ids + list(id)
-            mag = mag + vpred.tolist()
+            mag = mag + koef_mask
             # margin_img = margin.view(-1, 1, 224, 224)
         err = [(loader_test.dataset.indxx[i], e) for i, e in zip(ids, mag)]
         err2 = sorted(err, key=lambda x: x[1])

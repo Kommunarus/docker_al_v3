@@ -7,7 +7,7 @@ def get_model_instance_segmentation(num_classes):
     # load an instance segmentation model pre-trained on COCO
     model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights="DEFAULT",
                                                                box_detections_per_img=500,
-                                                               # box_score_thresh=0.8,
+                                                               box_score_thresh=0.5,
                                                                )
 
     # get number of input features for the classifier

@@ -25,6 +25,7 @@ if __name__ == '__main__':
     path1 = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/stage1_train'
     path2 = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/al'
     n_gpu = 1
+    n_gpu_anti = 0
     N = 3
 
     all_id = os.listdir(path1)
@@ -50,7 +51,7 @@ if __name__ == '__main__':
             not_label = list(set(all_id) - set(use_img))
 
             err_not_lab = find_err(model, path1, not_label, n_gpu=n_gpu)
-            out = [err_not_lab[-i] for i in range(1, N*5, 5)]
+            out = [err_not_lab[i] for i in [0, 3, 6]]
 
             save_id(out, path2, n)
             # out2 = [x[0] for x in out]
