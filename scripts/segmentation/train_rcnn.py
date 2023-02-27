@@ -15,6 +15,8 @@ import utils
 
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
+from scripts.segmentation.classif import train_model_map, eval_model_map
+
 
 def data_loaders(param, test=False, shuffle=True, usetransform=True):
     dataset_train = datasets(param, test, usetransform)
@@ -73,7 +75,7 @@ def plot_train(model, images, targets, images_val, targets_val, score_threshold)
 def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
     num_classes = 2
     device = torch.device("cpu" if not torch.cuda.is_available() else f'cuda:{n_gpu}')
-    device_val = torch.device('cuda:0' if n_gpu == 1 else 'cuda:1')
+    # device_val = torch.device('cuda:0' if n_gpu == 1 else 'cuda:1')
 
     param_train = dict()
     param_train['pathdataset'] = path_to_images
@@ -106,7 +108,7 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
 
     best_validation_dsc = 0.0
     best_model = None
-    epochs = 50
+    epochs = 300
     lr = 1e-4
     score_threshold = 0
 
@@ -138,8 +140,8 @@ def train_al(path_to_images, path_to_split, n_gpu, ploting=False):
             losses.backward()
             optimizer.step()
         # if True:
-        if epoch == epochs - 1:
-        # if epoch % 500 == 0 and epoch != 0:
+        # if epoch == epochs - 1:
+        if epoch % 5 == 0 and epoch != 0:
             # model.to(device_val)
             model.eval()
             # if epoch == epochs - 1:
@@ -240,11 +242,11 @@ def find_err(model, path_to_images, ids, n_gpu):
                 score_box = y_pred[row]['scores']
                 mask = y_pred[row]['masks']
 
-
-                t = torch.nonzero(mask).shape[0]
-                t_high = (mask[:, 0] > 0.5).sum().item()
-
-                k = 100*(t - t_high) / t / mask.shape[0] #* torch.mean(score_box).item()
+                k = find_k(mask)
+                # t = torch.nonzero(mask).shape[0]
+                # t_high = (mask[:, 0] > 0.5).sum().item()
+                #
+                # k = 100*(t - t_high) / t / mask.shape[0] #* torch.mean(score_box).item()
                 koef_mask.append(k)
 
 
@@ -256,6 +258,69 @@ def find_err(model, path_to_images, ids, n_gpu):
         err2 = sorted(err, key=lambda x: x[1])
     return err2
 
+def find_err_with_val(model_zero, path_to_images, ids, vallist, n_gpu):
+
+    param_test = dict()
+    param_test['pathdataset'] = path_to_images
+    param_test['batch_size'] = 1
+    param_test['img'] = vallist
+
+    loader_test = data_loaders(param_test, test=False, shuffle=False)
+    device = torch.device("cpu" if not torch.cuda.is_available() else f'cuda:{n_gpu}')
+
+    model_zero.eval()
+    model_zero.to(device)
+    newdataset = []
+    with torch.no_grad():
+        for i, data in enumerate(loader_test):
+            images, targets = data
+            images = list(image.to(device) for image in images)
+            targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+            out = model_zero(images)
+
+            pred_map=[{'boxes': out[0]['boxes'],
+                             'scores': out[0]['scores'],
+                             'labels': out[0]['labels'],
+                             'masks': (out[0]['masks'][:, 0] > 0.5)}]
+
+            target_map =[{'boxes': targets[0]['boxes'],
+                               'labels': targets[0]['labels'],
+                               'masks': (targets[0]['masks'] > 0.5)}]
+
+
+            metric = MeanAveragePrecision(iou_type='segm')
+            metric.update(pred_map, target_map)
+            out = metric.compute()
+            # newdataset.append([loader_test.dataset.indxx[i], int(out['map'].item() > 0.4)])
+            newdataset.append([loader_test.dataset.indxx[i], out['map'].item()])
+
+    model_map = train_model_map(newdataset, path_to_images)
+    pred_mape = eval_model_map(model_map, ids, path_to_images)
+
+    err = [(i, e) for i, e in zip(ids, pred_mape)]
+    err2 = sorted(err, key=lambda x: x[1])
+
+    return err2
+
+
+
+def find_k(maska):
+    a = []
+    t = torch.nonzero(maska).shape[0]
+    nump = maska[:, 0].cpu().numpy()
+    for j in range(10):
+        mask = (nump > j * 0.1) & (nump <= (j + 1) * 0.1)
+        if t > 0:
+            a.append(round(np.sum(mask) / t, 3))
+        else:
+            a.append(0)
+
+    x0 = a[0]
+    x9 = a[9]
+    x21 = a[3] + a[4] + a[5] + a[6] + a[7]
+
+    k = 7*x0 + x9 - 12*x21
+    return k
 
 def ensemble_find_err(models, path_to_images, ids, n_gpu):
     param_test = dict()

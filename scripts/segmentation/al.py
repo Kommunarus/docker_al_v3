@@ -1,5 +1,8 @@
 import os
-from scripts.segmentation.train_rcnn import find_err
+import random
+import torch
+import numpy as np
+from scripts.segmentation.train_rcnn import find_err, find_err_with_val
 from scripts.segmentation.train_rcnn import train_al
 import matplotlib.pyplot as plt
 import PIL.Image as Image
@@ -23,10 +26,10 @@ def plot_img(path, listik, score, score2, pred_mask):
 
 if __name__ == '__main__':
     path1 = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/stage1_train'
-    path2 = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/al'
+    path2 = '/home/alex/PycharmProjects/dataset/data-science-bowl-2018/al2'
     n_gpu = 1
-    n_gpu_anti = 0
-    N = 3
+    # n_gpu_anti = 0
+    N = 20
 
     all_id = os.listdir(path1)
     for opyt in range(10):
@@ -35,14 +38,21 @@ if __name__ == '__main__':
             if file.find('step') > -1:
                 os.remove(os.path.join(path2, 'train', file))
         sc = []
-        for n in range(8):
+        for n in range(25):
 
             use_img = []
-            for type_file in ['train', 'val']:
+            val_list = []
+            for type_file in ['train']:
                 for file in os.listdir(os.path.join(path2, type_file)):
                     with open(os.path.join(path2, type_file, file)) as f:
                         for line in f.readlines():
                             use_img.append(line.strip())
+            for type_file in ['val']:
+                for file in os.listdir(os.path.join(path2, type_file)):
+                    with open(os.path.join(path2, type_file, file)) as f:
+                        for line in f.readlines():
+                            use_img.append(line.strip())
+                            val_list.append(line.strip())
 
             model, score = train_al(path1, path2, n_gpu=n_gpu)
             print(score, end=' ')
@@ -50,8 +60,24 @@ if __name__ == '__main__':
 
             not_label = list(set(all_id) - set(use_img))
 
-            err_not_lab = find_err(model, path1, not_label, n_gpu=n_gpu)
-            out = [err_not_lab[i] for i in [0, 3, 6]]
+            err_not_lab = find_err_with_val(model, path1, not_label, val_list, n_gpu=n_gpu)
+            # err_not_lab = find_err(model, path1, not_label, n_gpu=n_gpu)
+            q = [0.3, 0.7]
+            # d = (q[-1] - q[0]) / (N - 1)
+            # for i in range(N-2):
+            #     q.append(q[0] + d * (i + 1))
+            # q.sort()
+            quantile = np.quantile([x[1] for x in err_not_lab], q)
+
+            ind0 = len([row for row in err_not_lab if row[1] < quantile[0]])
+            # ind1 = len([row for row in err_not_lab if row[1] < quantile[1]])
+
+            if len(err_not_lab[:ind0]) > N:
+                out = random.sample(err_not_lab[:ind0], k=N)
+            else:
+                out = err_not_lab[:N]
+            # out = random.sample(err_not_lab[ind0:ind1], k=N)
+            # out.append(new_l[0])
 
             save_id(out, path2, n)
             # out2 = [x[0] for x in out]

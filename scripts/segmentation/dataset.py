@@ -178,6 +178,76 @@ class Dataset_objdetect(Dataset):
     def __len__(self):
         return len(self.indxx)
 
+
+class Dataset_atlas(Dataset):
+    def __init__(self, id_images, path_to_dataset, model_feacher_resnet, device):
+        self.path_to_dataset = path_to_dataset
+        self.indxx = []
+        self.data = []
+        self.target = []
+        self.model_feacher_resnet = model_feacher_resnet
+        self.device = device
+
+        for idx, score in id_images:
+            file1 = os.path.join(path_to_dataset, idx, 'images')
+            files = os.listdir(file1)
+            images = os.path.join(file1, files[0])
+            self.data.append(images)
+            self.indxx.append(idx)
+            self.target.append(score)
+
+        self.transform = A.Compose([
+            A.VerticalFlip(p=0.5),
+            A.HorizontalFlip(p=0.5),
+            A.RandomBrightnessContrast(p=0.2),
+        ])
+
+    def __getitem__(self, idx):
+        path_img = self.data[idx]
+        pil_img = Image.open(path_img).convert('RGB')
+        pil_img = pil_img.resize((224, 224))
+        transf = self.transform(image=np.array(pil_img))
+        new_image = transf['image']
+
+        transformed_image = torch.unsqueeze(transforms.ToTensor()(new_image).to(self.device), 0)
+
+        f = torch.squeeze(self.model_feacher_resnet.predict(transformed_image))
+        return f, self.target[idx]
+
+    def __len__(self):
+        return len(self.indxx)
+
+
+class Dataset_atlas_eval(Dataset):
+    def __init__(self, id_images, path_to_dataset, model_feacher_resnet, device):
+        self.path_to_dataset = path_to_dataset
+        self.indxx = []
+        self.data = []
+        self.model_feacher_resnet = model_feacher_resnet
+        self.device = device
+
+        for idx in id_images:
+            file1 = os.path.join(path_to_dataset, idx, 'images')
+            files = os.listdir(file1)
+            images = os.path.join(file1, files[0])
+            self.data.append(images)
+            self.indxx.append(idx)
+
+
+    def __getitem__(self, idx):
+        path_img = self.data[idx]
+        pil_img = Image.open(path_img).convert('RGB')
+        pil_img = pil_img.resize((224, 224))
+
+        transformed_image = torch.unsqueeze(transforms.ToTensor()(pil_img).to(self.device), 0)
+
+        f = torch.squeeze(self.model_feacher_resnet.predict(transformed_image))
+        return f
+
+    def __len__(self):
+        return len(self.indxx)
+
+
 if __name__ == '__main__':
     listfile = ['0a7d30b252359a10fd298b638b90cb9ada3acced4e0c0e5a3692013f432ee4e9',
                 '0acd2c223d300ea55d0546797713851e818e5c697d073b7f4091b96ce0f3d2fe']
